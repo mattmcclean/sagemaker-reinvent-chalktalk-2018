@@ -17,6 +17,7 @@ import logging
 import os
 
 import torch
+from torchvision.models import resnet34
 
 from fastai.imports import *
 
@@ -34,60 +35,48 @@ classes = ('cats', 'dogs')
 arch = resnet34
 
 def _train(args):
-    is_distributed = len(args.hosts) > 1 and args.dist_backend is not None
-    logger.debug("Distributed training - {}".format(is_distributed))
-
-    if is_distributed:
-        # Initialize the distributed environment.
-        world_size = len(args.hosts)
-        os.environ['WORLD_SIZE'] = str(world_size)
-        host_rank = args.hosts.index(args.current_host)
-        dist.init_process_group(backend=args.dist_backend, rank=host_rank, world_size=world_size)
-        logger.info(
-            'Initialized the distributed environment: \'{}\' backend on {} nodes. '.format(
-                args.dist_backend,
-                dist.get_world_size()) + 'Current host rank is {}. Using cuda: {}. Number of gpus: {}'.format(
-                dist.get_rank(), torch.cuda.is_available(), args.num_gpus))
+    print('Called _train method')
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    logger.info("Device Type: {}".format(device))
+    print("Device Type: {}".format(device))
 
-    logger.debug("Loading data transformer")
+    print('Called _train method')
     tfms = tfms_from_model(arch, args.image_size, aug_tfms=transforms_side_on, max_zoom=1.1)
     
-    logger.debug("Creating image classifier")
+    print("Creating image classifier")
     data = ImageClassifierData.from_paths(args.data_dir, bs=args.batch_size, tfms=tfms)
     
-    logger.info("Creating pretrained conv net")
+    print("Creating pretrained conv net")
     learn = ConvLearner.pretrained(arch, data, precompute=True)
     
-    logger.debug("Starting training...")
+    print("Starting training...")
     learn.fit(args.lr, 1)
+    print('Done first epoch')
     learn.precompute=False
+    print('Doing another {} epochs'.format(args.epochs))
     learn.fit(args.lr, args.epochs, cycle_len=1)
-    logger.info("Training finished")
     print('Finished Training')
     return _save_model(learn.model, args.model_dir)
 
 
 def _save_model(model, model_dir):
-    logger.info("Saving the model.")
+    print("Saving the model.")
     path = os.path.join(model_dir, 'model.pth')
     # recommended way from http://pytorch.org/docs/master/notes/serialization.html
     torch.save(model.state_dict(), path)
+    print('Saved model')
 
 
 def model_fn(model_dir):
-    logger.info('model_fn')
+    print('model_fn')
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    model = ConvLearner(arch, len(classes), False, False).model
-    if torch.cuda.device_count() > 1:
-        logger.info("Gpu count: {}".format(torch.cuda.device_count()))
-        model = nn.DataParallel(model)
+    learn = ConvnetBuilder(arch, len(classes), False, False, pretrained=False)
+    model = learn.model
 
     with open(os.path.join(model_dir, 'model.pth'), 'rb') as f:
         model.load_state_dict(torch.load(f))
-    return model.to(device)
+    print('Returning model')
+    return model
 
 
 if __name__ == '__main__':
