@@ -125,7 +125,7 @@ def input_fn(request_body, content_type=JPEG_CONTENT_TYPE):
 # Perform prediction on the deserialized object, with the loaded model
 def predict_fn(input_object, model):
     logger.info("Calling model")
-    log_preds = model['model'](input_object).data.numpy()
+    log_preds = model(input_object).data.numpy()
     
     logger.info("Getting best prediction")
     preds = np.argmax(np.exp(log_preds), axis=1)
