@@ -107,7 +107,8 @@ def model_fn(model_dir):
     with open(os.path.join(model_dir, 'model.pth'), 'rb') as f:
         model.load_state_dict(torch.load(f))
     logger.debug('Returning model')
-    return model
+    model.cpu()
+    return model.eval()
 
 # Deserialize the Invoke request body into an object we can perform prediction on
 def input_fn(request_body, content_type=JPEG_CONTENT_TYPE):
@@ -117,7 +118,7 @@ def input_fn(request_body, content_type=JPEG_CONTENT_TYPE):
         img_pil = Image.open(io.BytesIO(request_body))
         img_tensor = preprocess(img_pil)
         img_tensor.unsqueeze_(0)
-        img_variable = Variable(img_tensor)
+        img_variable = Variable(img_tensor.cpu())
         logger.info("Returning image as PyTorch Variable.")
         return img_variable
     raise Exception('Requested unsupported ContentType in content_type: {}'.format(content_type))
