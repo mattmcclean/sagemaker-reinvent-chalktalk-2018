@@ -13,10 +13,17 @@
 import ast
 import argparse
 import logging
-
+import json
 import os
+import io
+
+import numpy as np
+from PIL import Image
 
 import torch
+from torch.autograd import Variable
+
+from torchvision import transforms
 from torchvision.models import resnet34
 
 from fastai.imports import *
@@ -30,54 +37,108 @@ from fastai.sgdr import *
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
+# set the constants for the content types
+JSON_CONTENT_TYPE = 'application/json'
+JPEG_CONTENT_TYPE = 'image/jpeg'
+
+# define the classification classes
 classes = ('cats', 'dogs')
 
+# define the architecture of the Convolutional Neural Network
 arch = resnet34
 
+preprocess = transforms.Compose([
+   transforms.Resize(256),
+   transforms.CenterCrop(IMG_SIZE),
+   transforms.ToTensor(),
+   transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+])
+
+# Preprocess the image
+def preprocess_image(img):
+    logger.info("Preprocessing image")
+    img_tensor = preprocess(img)
+    img_tensor.unsqueeze_(0)
+    return img_tensor
+
+# The train method
 def _train(args):
-    print('Called _train method')
+    logger.debug('Called _train method')
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    print("Device Type: {}".format(device))
+    logger.info("Device Type: {}".format(device))
 
-    print('Called _train method')
+    logger.debug('Called _train method')
     tfms = tfms_from_model(arch, args.image_size, aug_tfms=transforms_side_on, max_zoom=1.1)
     
-    print("Creating image classifier")
+    logger.debug("Creating image classifier")
     data = ImageClassifierData.from_paths(args.data_dir, bs=args.batch_size, tfms=tfms)
     
-    print("Creating pretrained conv net")
+    logger.debug("Creating pretrained conv net")
     learn = ConvLearner.pretrained(arch, data, precompute=True)
     
-    print("Starting training...")
+    logger.info("Starting training...")
     learn.fit(args.lr, 1)
-    print('Done first epoch')
+    logger.debug('Done first epoch')
     learn.precompute=False
-    print('Doing another {} epochs'.format(args.epochs))
+    logger.debug('Doing another {} epochs'.format(args.epochs))
     learn.fit(args.lr, args.epochs, cycle_len=1)
-    print('Finished Training')
+    logger.info('Finished Training')
     return _save_model(learn.model, args.model_dir)
 
-
+# save the model
 def _save_model(model, model_dir):
-    print("Saving the model.")
+    logger.debug("Saving the model.")
     path = os.path.join(model_dir, 'model.pth')
     # recommended way from http://pytorch.org/docs/master/notes/serialization.html
     torch.save(model.state_dict(), path)
-    print('Saved model')
+    logger.debug('Saved model')
 
-
+# Return the Convolutional Neural Network model
 def model_fn(model_dir):
-    print('model_fn')
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    logger.debug('model_fn')
     learn = ConvnetBuilder(arch, len(classes), False, False, pretrained=False)
     model = learn.model
 
     with open(os.path.join(model_dir, 'model.pth'), 'rb') as f:
         model.load_state_dict(torch.load(f))
-    print('Returning model')
+    logger.debug('Returning model')
     return model
 
+# Deserialize the Invoke request body into an object we can perform prediction on
+def input_fn(request_body, content_type=JPEG_CONTENT_TYPE):
+    logger.info('Deserializing the input data.')
+    if content_type == JPEG_CONTENT_TYPE:
+        logger.info('Processing jpeg image.')
+        img_pil = Image.open(io.BytesIO(request_body))
+        img_tensor = preprocess(img_pil)
+        img_tensor.unsqueeze_(0)
+        img_variable = Variable(img_tensor)
+        logger.info("Returning image as PyTorch Variable.")
+        return img_variable
+    raise Exception('Requested unsupported ContentType in content_type: {}'.format(content_type))
+
+# Perform prediction on the deserialized object, with the loaded model
+def predict_fn(input_object, model):
+    logger.info("Calling model")
+    log_preds = model['model'](input_object).data.numpy()
+    
+    logger.info("Getting best prediction")
+    preds = np.argmax(np.exp(log_preds), axis=1)
+    
+    logger.info("Getting class and confidence score")
+    response = {}
+    response['class'] = classes[preds.item()]
+    response['confidence'] = np.exp(log_preds[:,preds.item()]).item()
+    logger.info(response)
+    return response
+
+# Serialize the prediction result into the desired response content type
+def output_fn(prediction, accept=JSON_CONTENT_TYPE):        
+    logger.info('Serializing the generated output.')
+    if accept == JSON_CONTENT_TYPE:
+        return json.dumps(prediction), accept
+    raise Exception('Requested unsupported ContentType in Accept: {}'.format(accept))    
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
