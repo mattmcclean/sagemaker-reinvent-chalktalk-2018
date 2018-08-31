@@ -34,12 +34,16 @@ from fastai.model import *
 from fastai.dataset import *
 from fastai.sgdr import *
 
+# setup the logger
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 # set the constants for the content types
 JSON_CONTENT_TYPE = 'application/json'
 JPEG_CONTENT_TYPE = 'image/jpeg'
+
+# get the image size from an environment variable
+IMG_SIZE = int(os.environ.get('IMAGE_SIZE', '224'))
 
 # define the classification classes
 classes = ('cats', 'dogs')
