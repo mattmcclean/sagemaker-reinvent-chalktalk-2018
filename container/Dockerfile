@@ -15,7 +15,7 @@
 # https://docs.docker.com/compose/gettingstarted/#step-2-create-a-dockerfile
 # https://github.com/awslabs/amazon-sagemaker-examples/master/advanced_functionality/pytorch_extending_our_containers/pytorch_extending_our_containers.ipynb
 # SageMaker PyTorch image
-FROM 934676248949.dkr.ecr.eu-west-1.amazonaws.com/sagemaker-fastai:0.3.1-gpu-py36
+FROM mattmcclean/sagemaker-fastai:0.3.1-gpu-py36
 
 ENV PATH="/opt/ml/code:${PATH}"
 
