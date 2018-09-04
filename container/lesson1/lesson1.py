@@ -42,7 +42,7 @@ logger.setLevel(logging.DEBUG)
 JSON_CONTENT_TYPE = 'application/json'
 JPEG_CONTENT_TYPE = 'image/jpeg'
 
-# get the image size from an environment variable
+# get the image size from an environment variable for inference
 IMG_SIZE = int(os.environ.get('IMAGE_SIZE', '224'))
 
 # define the classification classes
@@ -51,6 +51,7 @@ classes = ('cats', 'dogs')
 # define the architecture of the Convolutional Neural Network
 arch = resnet34
 
+# define the image preprocess steps for inference
 preprocess = transforms.Compose([
    transforms.Resize(256),
    transforms.CenterCrop(IMG_SIZE),
@@ -67,36 +68,36 @@ def preprocess_image(img):
 
 # The train method
 def _train(args):
-    logger.debug('Called _train method')
+    print('Called _train method')
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    logger.info("Device Type: {}".format(device))
+    print("Device Type: {}".format(device))
 
-    logger.debug('Called _train method')
+    print('Called _train method')
     tfms = tfms_from_model(arch, args.image_size, aug_tfms=transforms_side_on, max_zoom=1.1)
     
-    logger.debug("Creating image classifier")
+    print("Creating image classifier")
     data = ImageClassifierData.from_paths(args.data_dir, bs=args.batch_size, tfms=tfms)
     
-    logger.debug("Creating pretrained conv net")
+    print("Creating pretrained conv net")
     learn = ConvLearner.pretrained(arch, data, precompute=True)
     
-    logger.info("Starting training...")
+    print("Starting training...")
     learn.fit(args.lr, 1)
-    logger.debug('Done first epoch')
+    print('Done first epoch')
     learn.precompute=False
-    logger.debug('Doing another {} epochs'.format(args.epochs))
+    print('Doing another {} epochs'.format(args.epochs))
     learn.fit(args.lr, args.epochs, cycle_len=1)
-    logger.info('Finished Training')
+    print('Finished Training')
     return _save_model(learn.model, args.model_dir)
 
 # save the model
 def _save_model(model, model_dir):
-    logger.debug("Saving the model.")
+    print("Saving the model.")
     path = os.path.join(model_dir, 'model.pth')
     # recommended way from http://pytorch.org/docs/master/notes/serialization.html
     torch.save(model.state_dict(), path)
-    logger.debug('Saved model')
+    print('Saved model')
 
 # Return the Convolutional Neural Network model
 def model_fn(model_dir):
@@ -152,8 +153,8 @@ if __name__ == '__main__':
                         help='number of data loading workers (default: 2)')
     parser.add_argument('--epochs', type=int, default=2, metavar='E',
                         help='number of total epochs to run (default: 2)')
-    parser.add_argument('--batch-size', type=int, default=4, metavar='BS',
-                        help='batch size (default: 4)')
+    parser.add_argument('--batch-size', type=int, default=64, metavar='BS',
+                        help='batch size (default: 64)')
     parser.add_argument('--lr', type=float, default=0.001, metavar='LR',
                         help='initial learning rate (default: 0.001)')
     parser.add_argument('--momentum', type=float, default=0.9, metavar='M', help='momentum (default: 0.9)')
