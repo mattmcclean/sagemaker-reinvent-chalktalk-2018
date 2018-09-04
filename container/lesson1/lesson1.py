@@ -68,7 +68,7 @@ def preprocess_image(img):
 
 # The train method
 def _train(args):
-    print('Called _train method')
+    print(f'Called _train method with batch size: {args.batch_size}, image size: {args.image_size}, epochs: {args.epochs}, learn rate: {args.lr}')
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     print("Device Type: {}".format(device))
