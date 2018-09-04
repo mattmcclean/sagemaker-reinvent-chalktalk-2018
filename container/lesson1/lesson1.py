@@ -73,7 +73,7 @@ def _train(args):
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     print("Device Type: {}".format(device))
 
-    print('Called _train method')
+    print('Getting training data transformations object')
     tfms = tfms_from_model(arch, args.image_size, aug_tfms=transforms_side_on, max_zoom=1.1)
     
     print("Creating image classifier")
