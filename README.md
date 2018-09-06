@@ -21,4 +21,6 @@ Take note of the resources created including:
 
 ![Screenshot](img/sagemaker-nb.png)
 
+3. Select the folder named **sagemaker-fastai-example** and open the notebook named: **fastai_example_notebook.ipynb** as per the screenshot below.
 
+![Screenshot](img/jupyter-nb.png)
