@@ -1,0 +1,68 @@
+Description: "Creates resources (IAM roles, SageMaker Notebook instance) for the SageMaker fast.ai example application"
+Parameters:
+
+  NotebookInstanceType:
+    Type: "String"
+    Default: ml.p3.2xlarge
+    AllowedValues:
+      - ml.t2.medium
+      - ml.t2.large
+      - ml.t2.xlarge
+      - ml.t2.2xlarge
+      - ml.m4.xlarge
+      - ml.m4.2xlarge
+      - ml.p2.xlarge
+      - ml.p3.2xlarge
+    Description: Enter a valid SageMaker notebook instance type. Defaults to ml.p3.2xlarge.
+
+Resources:
+  SageMakerIamRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          -
+            Effect: Allow
+            Principal:
+              Service: sagemaker.amazonaws.com
+            Action: sts:AssumeRole
+      Path: "/"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryFullAccess"
+        - "arn:aws:iam::aws:policy/AmazonSageMakerFullAccess"
+
+  NotebookLifecycleConfig:
+    Type: "AWS::SageMaker::NotebookInstanceLifecycleConfig"
+    Properties:
+      OnCreate:
+        - Content:
+            Fn::Base64: |
+              #!/bin/bash
+              set -e
+              sudo -i -u ec2-user bash << EOF
+              echo "Setup the SageMaker fast.ai example application"
+              git clone https://github.com/mattmcclean/sagemaker-fastai-example.git /home/ec2-user/SageMaker/sagemaker-fastai-example/
+              EOF
+
+      OnStart:
+        - Content:
+            Fn::Base64: |
+              #!/bin/bash
+              set -e
+              cd /home/ec2-user/SageMaker/sagemaker-fastai-example/utils
+              ./setup.sh        
+
+  SageMakerNotebookInstance:
+    Type: "AWS::SageMaker::NotebookInstance"
+    Properties:
+      NotebookInstanceName: MLWorkshopInstance
+      InstanceType: !Ref NotebookInstanceType
+      RoleArn: !GetAtt SageMakerIamRole.Arn
+      LifecycleConfigName: !GetAtt NotebookLifecycleConfig.NotebookInstanceLifecycleConfigName
+
+Outputs:
+  SageMakerNotebookInstance:
+    Value: !GetAtt SageMakerNotebookInstance.NotebookInstanceName
+  IAMRole:
+    Value: !GetAtt SageMakerIamRole.Arn
