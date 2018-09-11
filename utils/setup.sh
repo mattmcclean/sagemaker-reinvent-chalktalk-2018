@@ -6,15 +6,12 @@ if [ $? -eq 0 ]; then
   # check if we have nvidia-docker
   NVIDIA_DOCKER=`rpm -qa | grep -c nvidia-docker2`
   if [ $NVIDIA_DOCKER -eq 0 ]; then
-    # Install nvidia-docker2
-    #sudo pkill -SIGHUP dockerd
-    sudo yum -y remove docker
-    sudo yum -y install docker-17.09.1ce-1.111.amzn1
-
+    sudo yum -y update docker
     sudo /etc/init.d/docker start
 
+    # Install nvidia-docker2
     curl -s -L https://nvidia.github.io/nvidia-docker/amzn1/nvidia-docker.repo | sudo tee /etc/yum.repos.d/nvidia-docker.repo
-    sudo yum install -y nvidia-docker2-2.0.3-1.docker17.09.1.ce.amzn1
+    sudo yum install -y nvidia-docker2
     sudo cp daemon.json /etc/docker/daemon.json
     sudo pkill -SIGHUP dockerd
     echo "installed nvidia-docker2"
@@ -29,7 +26,8 @@ fi
 docker-compose version >/dev/null 2>&1
 if [ $? -ne 0 ]; then
   # install docker compose
-  pip install docker-compose
+  sudo curl -L "https://github.com/docker/compose/releases/download/1.22.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+  chmod +x /usr/local/bin/docker-compose
 fi
 
 # check if we need to configure our docker interface
