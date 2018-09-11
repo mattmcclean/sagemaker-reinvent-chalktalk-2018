@@ -6,12 +6,15 @@ if [ $? -eq 0 ]; then
   # check if we have nvidia-docker
   NVIDIA_DOCKER=`rpm -qa | grep -c nvidia-docker2`
   if [ $NVIDIA_DOCKER -eq 0 ]; then
-    sudo yum -y update docker
+    # Install nvidia-docker2
+    #sudo pkill -SIGHUP dockerd
+    sudo yum -y remove docker
+    sudo yum -y install docker-17.09.1ce-1.111.amzn1
+
     sudo /etc/init.d/docker start
 
-    # Install nvidia-docker2
     curl -s -L https://nvidia.github.io/nvidia-docker/amzn1/nvidia-docker.repo | sudo tee /etc/yum.repos.d/nvidia-docker.repo
-    sudo yum install -y nvidia-docker2
+    sudo yum install -y nvidia-docker2-2.0.3-1.docker17.09.1.ce.amzn1
     sudo cp daemon.json /etc/docker/daemon.json
     sudo pkill -SIGHUP dockerd
     echo "installed nvidia-docker2"
