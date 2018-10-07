@@ -5,13 +5,11 @@
 
 # The argument to this script is the image name. This will be used as the image on the local
 # machine and combined with the account and region to form the repository name for ECR.
-image=$1
+image="sagemaker-fastai-dogscats"
 
-if [ "$image" == "" ]
-then
-    echo "Usage: $0 <image-name>"
-    exit 1
-fi
+# input parameters
+FASTAI_VERSION=${1:-1.0}
+PY_VERSION=${2:-py37}
 
 # Get the account number associated with the current IAM credentials
 account=$(aws sts get-caller-identity --query Account --output text)
@@ -21,12 +19,9 @@ then
     exit 255
 fi
 
-
 # Get the region defined in the current configuration (default to us-west-2 if none defined)
 region=$(aws configure get region)
 region=${region:-us-west-2}
-
-fullname="${account}.dkr.ecr.${region}.amazonaws.com/${image}:latest"
 
 # If the repository doesn't exist in ECR, create it.
 
@@ -42,11 +37,12 @@ $(aws ecr get-login --region ${region} --no-include-email)
 
 # Build the docker image locally with the image name and then push it to ECR
 # with the full name.
-cd container
-docker build  -t ${image} .
-docker tag ${image} ${fullname}
-
+fullname="${account}.dkr.ecr.${region}.amazonaws.com/${image}:${FASTAI_VERSION}-gpu-${PY_VERSION}"
+docker build -t ${image}:${FASTAI_VERSION}-gpu-${PY_VERSION} --build-arg ARCH=gpu .
+docker tag ${image}:${FASTAI_VERSION}-gpu-${PY_VERSION} ${fullname}
 docker push ${fullname}
-cd ..
 
-
+fullname="${account}.dkr.ecr.${region}.amazonaws.com/${image}:${FASTAI_VERSION}-cpu-${PY_VERSION}"
+docker build -t ${image}:${FASTAI_VERSION}-cpu-${PY_VERSION} --build-arg ARCH=cpu .
+docker tag ${image}:${FASTAI_VERSION}-cpu-${PY_VERSION} ${fullname}
+docker push ${fullname}

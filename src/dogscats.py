@@ -24,15 +24,10 @@ import torch
 from torch.autograd import Variable
 
 from torchvision import transforms
-from torchvision.models import resnet34
 
-from fastai.imports import *
-
-from fastai.transforms import *
-from fastai.conv_learner import *
-from fastai.model import *
-from fastai.dataset import *
-from fastai.sgdr import *
+from fastai import *
+from fastai.vision import *
+from fastai.docs import *
 
 # setup the logger
 logger = logging.getLogger(__name__)
@@ -48,8 +43,21 @@ IMG_SIZE = int(os.environ.get('IMAGE_SIZE', '224'))
 # define the classification classes
 classes = ('cats', 'dogs')
 
-# define the architecture of the Convolutional Neural Network
-arch = resnet34
+# define the architecture of the app
+arch = tvm.resnet34
+
+# By default split models between first and second layer
+def _default_split(m:Model): return (m[1],)
+# Split a resnet style model
+def _resnet_split(m:Model): return (m[0][6],m[1])
+
+_default_meta = {'cut':-1, 'split':_default_split}
+_resnet_meta  = {'cut':-2, 'split':_resnet_split }
+
+model_meta = {
+    tvm.resnet18 :{**_resnet_meta}, tvm.resnet34: {**_resnet_meta},
+    tvm.resnet50 :{**_resnet_meta}, tvm.resnet101:{**_resnet_meta},
+    tvm.resnet152:{**_resnet_meta}}
 
 # define the image preprocess steps for inference
 preprocess = transforms.Compose([
@@ -72,23 +80,16 @@ def _train(args):
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     print("Device Type: {}".format(device))
-
-    print('Getting training data transformations object')
-    tfms = tfms_from_model(arch, args.image_size, aug_tfms=transforms_side_on, max_zoom=1.1)
     
-    print("Creating image classifier")
-    data = ImageClassifierData.from_paths(args.data_dir, bs=args.batch_size, tfms=tfms)
-    
+    print(f'Getting training data from dir: {args.data_dir}')
+    data = image_data_from_folder(args.data_dir, ds_tfms=get_transforms(), tfms=imagenet_norm, size=args.image_size)
     print("Creating pretrained conv net")
-    learn = ConvLearner.pretrained(arch, data, precompute=True)
-    
-    print("Starting training...")
-    learn.fit(args.lr, 1)
-    print('Done first epoch')
-    learn.precompute=False
-    print('Doing another {} epochs'.format(args.epochs))
-    learn.fit(args.lr, args.epochs, cycle_len=1)
-    print('Finished Training')
+    learn = ConvLearner(data, tvm.resnet34, metrics=accuracy)
+    print("File one cycle")
+    learn.fit_one_cycle(1)
+    print("Unfreeze and run more cycles")
+    learn.fit_one_cycle(6, slice(1e-5,3e-4), pct_start=0.05)
+    print('Save model')
     return _save_model(learn.model, args.model_dir)
 
 # save the model
@@ -99,27 +100,43 @@ def _save_model(model, model_dir):
     torch.save(model.state_dict(), path)
     print('Saved model')
 
+# create the model similar to source code here: https://github.com/fastai/fastai/blob/master/fastai/vision/learner.py
+def _create_model(arch:Callable):
+    print("Creating new model")
+    meta = model_meta.get(arch, _default_meta)
+    torch.backends.cudnn.benchmark = True
+    body = create_body(arch(False), meta['cut'])
+    nf = num_features(body) * 2
+    head = create_head(nf, len(classes))
+    model = nn.Sequential(body, head)
+    print("Model created")
+    return model
+    
 # Return the Convolutional Neural Network model
 def model_fn(model_dir):
     logger.debug('model_fn')
-    learn = ConvnetBuilder(arch, len(classes), False, False, pretrained=False)
-    model = learn.model
-
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    print("Device Type: {}".format(device))    
+    model = _create_model(tvm.resnet34)
+    print("Loading model weights")
     with open(os.path.join(model_dir, 'model.pth'), 'rb') as f:
         model.load_state_dict(torch.load(f, map_location=lambda storage, loc: storage))
-    logger.debug('Returning model')
-    model.cpu()
-    return model.eval()
+    print("Model weights loaded")
+    model.to(device)
+    model.eval()
+    return model
 
 # Deserialize the Invoke request body into an object we can perform prediction on
 def input_fn(request_body, content_type=JPEG_CONTENT_TYPE):
     logger.info('Deserializing the input data.')
     if content_type == JPEG_CONTENT_TYPE:
+        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        print("Device Type: {}".format(device))            
         logger.info('Processing jpeg image.')
-        img_pil = Image.open(io.BytesIO(request_body))
+        img_pil = PIL.Image.open(io.BytesIO(request_body)).convert('RGB')
         img_tensor = preprocess(img_pil)
         img_tensor.unsqueeze_(0)
-        img_variable = Variable(img_tensor.cpu())
+        img_variable = Variable(img_tensor.to(device))
         logger.info("Returning image as PyTorch Variable.")
         return img_variable
     raise Exception('Requested unsupported ContentType in content_type: {}'.format(content_type))
@@ -128,7 +145,10 @@ def input_fn(request_body, content_type=JPEG_CONTENT_TYPE):
 def predict_fn(input_object, model):
     logger.info("Calling model")
     log_preds = model(input_object).data.numpy()
-    
+    print("Raw output")
+    print(log_preds)
+    print("Exp raw output")
+    print(np.exp(log_preds))
     logger.info("Getting best prediction")
     preds = np.argmax(np.exp(log_preds), axis=1)
     

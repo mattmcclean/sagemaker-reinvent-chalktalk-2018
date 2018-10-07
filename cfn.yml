@@ -42,6 +42,7 @@ Resources:
               set -e
               sudo -i -u ec2-user bash << EOF
               echo "Setup the SageMaker fast.ai example application"
+              git clone https://github.com/mattmcclean/sagemaker-fastai-container.git /home/ec2-user/SageMaker/sagemaker-fastai-container/
               git clone https://github.com/mattmcclean/sagemaker-fastai-example.git /home/ec2-user/SageMaker/sagemaker-fastai-example/
               EOF
 
