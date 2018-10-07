@@ -16,6 +16,7 @@ import logging
 import json
 import os
 import io
+import glob
 
 import numpy as np
 from PIL import Image
@@ -42,9 +43,6 @@ IMG_SIZE = int(os.environ.get('IMAGE_SIZE', '224'))
 
 # define the classification classes
 classes = ('cats', 'dogs')
-
-# define the architecture of the app
-arch = tvm.resnet34
 
 # By default split models between first and second layer
 def _default_split(m:Model): return (m[1],)
@@ -76,35 +74,34 @@ def preprocess_image(img):
 
 # The train method
 def _train(args):
-    print(f'Called _train method with batch size: {args.batch_size}, image size: {args.image_size}, epochs: {args.epochs}, learn rate: {args.lr}')
-
+    print(f'Called _train method with model arch: {args.model_arch}, batch size: {args.batch_size}, image size: {args.image_size}, epochs: {args.epochs}')
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     print("Device Type: {}".format(device))
-    
     print(f'Getting training data from dir: {args.data_dir}')
-    data = image_data_from_folder(args.data_dir, ds_tfms=get_transforms(), tfms=imagenet_norm, size=args.image_size)
+    data = image_data_from_folder(args.data_dir, ds_tfms=get_transforms(), tfms=imagenet_norm, size=args.image_size, bs=args.batch_size)
+    print(f'Model architecture is {args.model_arch}')
+    arch = getattr(tvm, args.model_arch)
     print("Creating pretrained conv net")
-    learn = ConvLearner(data, tvm.resnet34, metrics=accuracy)
-    print("File one cycle")
+    learn = ConvLearner(data, arch, metrics=accuracy)
+    print("Fit one cycle")
     learn.fit_one_cycle(1)
-    print("Unfreeze and run more cycles")
-    learn.fit_one_cycle(6, slice(1e-5,3e-4), pct_start=0.05)
-    print('Save model')
-    return _save_model(learn.model, args.model_dir)
+    print(f'Unfreeze and run {args.epochs} more cycles')
+    learn.fit_one_cycle(args.epochs, slice(1e-5,3e-4), pct_start=0.05)
+    return _save_model(args.model_arch, learn.model, args.model_dir)
 
 # save the model
-def _save_model(model, model_dir):
+def _save_model(name, model, model_dir):
     print("Saving the model.")
-    path = os.path.join(model_dir, 'model.pth')
+    path = os.path.join(model_dir, f'{name}.pth')
     # recommended way from http://pytorch.org/docs/master/notes/serialization.html
     torch.save(model.state_dict(), path)
     print('Saved model')
 
 # create the model similar to source code here: https://github.com/fastai/fastai/blob/master/fastai/vision/learner.py
-def _create_model(arch:Callable):
+def _create_model(arch, device):
     print("Creating new model")
     meta = model_meta.get(arch, _default_meta)
-    torch.backends.cudnn.benchmark = True
+    if device == 'cuda' : torch.backends.cudnn.benchmark = True
     body = create_body(arch(False), meta['cut'])
     nf = num_features(body) * 2
     head = create_head(nf, len(classes))
@@ -116,10 +113,14 @@ def _create_model(arch:Callable):
 def model_fn(model_dir):
     logger.debug('model_fn')
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    print("Device Type: {}".format(device))    
-    model = _create_model(tvm.resnet34)
+    print("Device Type: {}".format(device))
+    # get the model architecture from name of saved model weights
+    arch_name = os.path.splitext(os.path.split(glob.glob(f'{model_dir}/resnet*.pth')[0])[1])[0]
+    print(f'Model architecture is: {arch_name}')
+    arch = getattr(tvm, arch_name)
+    model = _create_model(arch, device)
     print("Loading model weights")
-    with open(os.path.join(model_dir, 'model.pth'), 'rb') as f:
+    with open(os.path.join(model_dir, f'{arch_name}.pth'), 'rb') as f:
         model.load_state_dict(torch.load(f, map_location=lambda storage, loc: storage))
     print("Model weights loaded")
     model.to(device)
@@ -183,6 +184,8 @@ if __name__ == '__main__':
     # fast.ai specific parameters
     parser.add_argument('--image-size', type=int, default=224, metavar='IS',
                         help='image size (default: 224)')
+    parser.add_argument('--model-arch', type=str, default='resnet34', metavar='MA',
+                        help='model arch (default: resnet34)')
     
     # The parameters below retrieve their default values from SageMaker environment variables, which are
     # instantiated by the SageMaker containers framework.
