@@ -23,6 +23,7 @@ from PIL import Image
 
 import torch
 from torch.autograd import Variable
+import torch.nn.functional as F
 
 from torchvision import transforms
 
@@ -145,18 +146,18 @@ def input_fn(request_body, content_type=JPEG_CONTENT_TYPE):
 # Perform prediction on the deserialized object, with the loaded model
 def predict_fn(input_object, model):
     logger.info("Calling model")
-    log_preds = model(input_object).data.numpy()
+    output = model(input_object)
     print("Raw output")
-    print(log_preds)
-    print("Exp raw output")
-    print(np.exp(log_preds))
-    logger.info("Getting best prediction")
-    preds = np.argmax(np.exp(log_preds), axis=1)
-    
+    print(output.data)    
+    preds = F.softmax(output, dim=1)
+    print("Softmax output")
+    print(preds)
     logger.info("Getting class and confidence score")
+    conf_score, indx = torch.max(preds, 1)
+    print(f'conf score {conf_score.item()}, index: {indx.item()}')
     response = {}
-    response['class'] = classes[preds.item()]
-    response['confidence'] = np.exp(log_preds[:,preds.item()]).item()
+    response['class'] = classes[indx.item()]
+    response['confidence'] = conf_score.item()   
     logger.info(response)
     return response
 

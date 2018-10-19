@@ -16,7 +16,7 @@
 # https://github.com/awslabs/amazon-sagemaker-examples/master/advanced_functionality/pytorch_extending_our_containers/pytorch_extending_our_containers.ipynb
 # SageMaker fast.ai image
 ARG ARCH=gpu
-FROM sagemaker-fastai:1.0-$ARCH-py37
+FROM mattmcclean/sagemaker-fastai:1.0-$ARCH-py37
 
 ENV PATH="/opt/ml/code:${PATH}"
 
