@@ -53,25 +53,18 @@ def _resnet_split(m:Model): return (m[0][6],m[1])
 _default_meta = {'cut':-1, 'split':_default_split}
 _resnet_meta  = {'cut':-2, 'split':_resnet_split }
 
-model_meta = {
+_model_meta = {
     tvm.resnet18 :{**_resnet_meta}, tvm.resnet34: {**_resnet_meta},
     tvm.resnet50 :{**_resnet_meta}, tvm.resnet101:{**_resnet_meta},
     tvm.resnet152:{**_resnet_meta}}
 
 # define the image preprocess steps for inference
-preprocess = transforms.Compose([
+_preprocess = transforms.Compose([
    transforms.Resize(256),
    transforms.CenterCrop(IMG_SIZE),
    transforms.ToTensor(),
    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 ])
-
-# Preprocess the image
-def preprocess_image(img):
-    logger.info("Preprocessing image")
-    img_tensor = preprocess(img)
-    img_tensor.unsqueeze_(0)
-    return img_tensor
 
 # The train method
 def _train(args):
@@ -101,7 +94,7 @@ def _save_model(name, model, model_dir):
 # create the model similar to source code here: https://github.com/fastai/fastai/blob/master/fastai/vision/learner.py
 def _create_model(arch, device):
     print("Creating new model")
-    meta = model_meta.get(arch, _default_meta)
+    meta = _model_meta.get(arch, _default_meta)
     if device == 'cuda' : torch.backends.cudnn.benchmark = True
     body = create_body(arch(False), meta['cut'])
     nf = num_features(body) * 2
@@ -136,7 +129,7 @@ def input_fn(request_body, content_type=JPEG_CONTENT_TYPE):
         print("Device Type: {}".format(device))            
         logger.info('Processing jpeg image.')
         img_pil = PIL.Image.open(io.BytesIO(request_body)).convert('RGB')
-        img_tensor = preprocess(img_pil)
+        img_tensor = _preprocess(img_pil)
         img_tensor.unsqueeze_(0)
         img_variable = Variable(img_tensor.to(device))
         logger.info("Returning image as PyTorch Variable.")
