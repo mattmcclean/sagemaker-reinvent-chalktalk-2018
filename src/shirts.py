@@ -16,7 +16,12 @@ import logging
 import json
 import os
 import glob
+from io import BytesIO
 
+import torch
+import torch.nn.functional as F
+
+import fastai
 from fastai import *
 from fastai.vision import *
 
@@ -38,19 +43,20 @@ CLASSES = ['metal', 'sport']
 def _train(args):
     print(f'Called _train method with model arch: {args.model_arch}, batch size: {args.batch_size}, image size: {args.image_size}, epochs: {args.epochs}')
     print(f'Getting training data from dir: {args.data_dir}')
-    data = image_data_from_folder(args.data_dir, ds_tfms=get_transforms(), tfms=imagenet_norm, size=args.image_size, bs=args.batch_size)
+    data = ImageDataBunch.from_folder(args.data_dir, train=".", valid_pct=0.2,
+        ds_tfms=get_transforms(), size=args.image_size, num_workers=4, bs=args.batch_size).normalize(imagenet_stats)
     print(f'Model architecture is {args.model_arch}')
-    arch = getattr(tvm, args.model_arch)
+    arch = getattr(models, args.model_arch)
     print("Creating pretrained conv net")
     learn = create_cnn(data, arch, metrics=accuracy)
     print("Fit four cycles")
     learn.fit_one_cycle(4)
     print(f'Unfreeze and run {args.epochs} more cycles')
-    learn.fit_one_cycle(args.epochs, slice(3e-5,3e-4))
+    learn.unfreeze()
+    learn.fit_one_cycle(args.epochs, max_lr=slice(3e-5,3e-4))
     path = Path(args.model_dir)
-    model_filename=f'{args.model_arch}.pth'
-    print(f'Saving model weights')
-    learn.save(path/model_filename)
+    print(f'Saving model weights to dir: {args.model_dir}')
+    learn.save(path/args.model_arch)
 
 # Return the Convolutional Neural Network model
 def model_fn(model_dir):
@@ -59,12 +65,11 @@ def model_fn(model_dir):
     # get the model architecture from name of saved model weights
     arch_name = os.path.splitext(os.path.split(glob.glob(f'{model_dir}/resnet*.pth')[0])[1])[0]
     print(f'Model architecture is: {arch_name}')
-    arch = getattr(tvm, arch_name)
-    path = Path(model_dir)
-    model_filename =  f'{arch_name}.pth'
-    data = ImageDataBunch.single_from_classes(path, CLASSES, tfms=get_transforms(), size=224).normalize(imagenet_stats)
-    learn = create_cnn(data, arch, pretrained=False)
-    learn.load(path/model_filename)
+    arch = getattr(models, arch_name)
+    empty_data = ImageDataBunch.single_from_classes(Path('/tmp'), CLASSES, 
+        tfms=get_transforms(), size=224).normalize(imagenet_stats)
+    learn = create_cnn(empty_data, arch, pretrained=False)
+    learn.load(Path(model_dir)/arch_name)
     return learn
 
 # Deserialize the Invoke request body into an object we can perform prediction on
@@ -78,13 +83,15 @@ def input_fn(request_body, content_type=JPEG_CONTENT_TYPE):
 # Perform prediction on the deserialized object, with the loaded model
 def predict_fn(input_object, model):
     logger.info("Calling model")
-    _,_,losses = model.predict(img)
+    predict_class,_,predict_values = model.predict(input_object)
+    print(f'Predicted class is {predict_class}')
+    print(f'Predicted values are {predict_values}')
+    preds = F.softmax(predict_values, dim=0)
+    conf_score, indx = torch.max(preds, dim=0)
+    print(f'Softmax confidence score is {conf_score.item()}')
     response = {}
-    response['predictions'] = sorted(
-            zip(cat_learner.data.classes, map(float, losses)),
-            key=lambda p: p[1],
-            reverse=True
-        )
+    response['class'] = predict_class
+    response['confidence'] = conf_score.item()
     return response
 
 # Serialize the prediction result into the desired response content type

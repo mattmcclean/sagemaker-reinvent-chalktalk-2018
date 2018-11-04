@@ -19,7 +19,9 @@ if [ $? -eq 0 ]; then
     sudo pkill -SIGHUP dockerd
     echo "installed nvidia-docker2"
   else
-    echo "nvidia-docker2 already installed. We are good to go!"
+    echo "nvidia-docker2 already installed. updating default docker config"
+    sudo cp daemon.json /etc/docker/daemon.json
+    sudo pkill -SIGHUP dockerd    
   fi
 fi
 

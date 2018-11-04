@@ -16,7 +16,7 @@
 # https://github.com/awslabs/amazon-sagemaker-examples/master/advanced_functionality/pytorch_extending_our_containers/pytorch_extending_our_containers.ipynb
 # SageMaker fast.ai image
 ARG ARCH=gpu
-FROM mattmcclean/sagemaker-fastai:1.0-$ARCH-py37
+FROM sagemaker-fastai:1.0-$ARCH-py37
 
 ENV PATH="/opt/ml/code:${PATH}"
 
@@ -28,4 +28,4 @@ ENV SAGEMAKER_SUBMIT_DIRECTORY /opt/ml/code
 
 # this environment variable is used by the SageMaker fast.ai container to determine our program entry point
 # for training and serving.
-ENV SAGEMAKER_PROGRAM dogscats.py
+ENV SAGEMAKER_PROGRAM shirts.py
