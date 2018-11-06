@@ -21,7 +21,7 @@ FROM sagemaker-fastai:1.0-$ARCH-py37
 ENV PATH="/opt/ml/code:${PATH}"
 
 # /opt/ml and all subdirectories are utilized by SageMaker, we use the /code subdirectory to store our user code.
-COPY /src /opt/ml/code
+COPY /src/shirts /opt/ml/code
 
 # this environment variable is used by the SageMaker fast.ai container to determine our user code directory.
 ENV SAGEMAKER_SUBMIT_DIRECTORY /opt/ml/code
