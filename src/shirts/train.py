@@ -44,15 +44,25 @@ IMG_SIZE = int(os.environ.get('IMAGE_SIZE', '224'))
 # The train method
 def _train(args):
     print(f'Called _train method with model arch: {args.model_arch}, batch size: {args.batch_size}, image size: {args.image_size}, epochs: {args.epochs}, workers: {args.workers}, learn rate: {args.lr}, valid pct: {args.valid_pct}')
+
+    print(f'Resizing images from: {args.data_dir}')
+    verify_images(args.data_dir+'/sport', max_size=int(300))
+    verify_images(args.data_dir+'/metal', max_size=int(300))
+
     print(f'Getting training data from dir: {args.data_dir}')
-    data = ImageDataBunch.from_folder(args.data_dir, train=".", valid_pct=args.valid_pct,
-        ds_tfms=get_transforms(), size=args.image_size, num_workers=args.workers, bs=args.batch_size).normalize(imagenet_stats)
+    data = (ImageItemList.from_folder(args.data_dir)
+            .random_split_by_pct(args.valid_pct)
+            .label_from_folder()
+            .transform(get_transforms(), size=args.image_size)
+            .databunch(bs=args.batch_size, num_workers=args.workers)
+            .normalize(imagenet_stats))
+
     print(f'Model architecture is {args.model_arch}')
     arch = getattr(models, args.model_arch)
     print("Creating pretrained conv net")
     learn = create_cnn(data, arch, metrics=accuracy, callback_fns=[MetricsLogger])
     print("Fit four cycles")
-    learn.fit_one_cycle(4)
+    learn.fit_one_cycle(4, 1e-2)
     print(f'Unfreeze and run {args.epochs} more cycles')
     learn.unfreeze()
     learn.fit_one_cycle(args.epochs, max_lr=slice(args.lr/10,args.lr))
