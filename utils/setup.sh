@@ -19,9 +19,17 @@ if [ $? -eq 0 ]; then
     sudo pkill -SIGHUP dockerd
     echo "installed nvidia-docker2"
   else
-    echo "nvidia-docker2 already installed. updating default docker config"
-    sudo cp daemon.json /etc/docker/daemon.json
-    sudo pkill -SIGHUP dockerd    
+    echo "nvidia-docker2 already installed."
+    echo "check if docker config the same"
+    file1="/etc/docker/daemon.json"
+    file2="daemon.json"
+    if sudo cmp -s "$file1" "$file2" ; then
+       echo "Files are the same. Ignoring"
+    else
+       echo "Config is different. Updating and restarting Docker daemon"
+       sudo cp daemon.json /etc/docker/daemon.json
+       sudo pkill -SIGHUP dockerd
+    fi
   fi
 fi
 

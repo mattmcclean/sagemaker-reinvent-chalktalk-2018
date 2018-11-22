@@ -27,23 +27,23 @@ warnings.filterwarnings("ignore", category=UserWarning)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
-# define the fastai callback class to ouput metrics to CW logs
+# get the host from environment variable
+HOSTNAME = os.environ.get('SM_CURRENT_HOST', 'train-host')
+
+# define the fastai callback class to ouput metrics to CW logs for metrics
 @dataclass
 class MetricsLogger(LearnerCallback):
     # call when each epoch finishes to print the metrics
     def on_epoch_end(self, epoch: int, smooth_loss: Tensor, last_metrics: MetricsList, **kwargs: Any) -> bool:
         last_metrics = ifnone(last_metrics, [])
         stats = [(name, str(stat)) if isinstance(stat, int) else (name, f'{stat:.6f}')
-                 for name, stat in zip(self.learn.recorder.names, [epoch, smooth_loss] + last_metrics)]
-        str_metrics = ', '.join(f'{m[0]}=({m[1]})' for m in stats)
-        print(str_metrics)
-
-# get the image size from an environment variable for inference
-IMG_SIZE = int(os.environ.get('IMAGE_SIZE', '224'))
+                 for name, stat in zip(self.learn.recorder.names[1:], [smooth_loss] + last_metrics)]
+        for m in stats:
+            print(f'#quality_metric: host={HOSTNAME}, epoch={epoch}, {m[0]}={m[1]}')
 
 # The train method
 def _train(args):
-    print(f'Called _train method with model arch: {args.model_arch}, batch size: {args.batch_size}, image size: {args.image_size}, epochs: {args.epochs}, workers: {args.workers}, learn rate: {args.lr}, valid pct: {args.valid_pct}')
+    print(f'Called _train method with parameters:\n\t\tmodel arch: {args.model_arch}\n\t\tbatch size: {args.batch_size}\n\t\timage size: {args.image_size}\n\t\tepochs: {args.epochs}\n\t\tworkers: {args.workers}\n\t\tlearn rate: {args.lr}\n\t\tvalid pct: {args.valid_pct}')
 
     print(f'Resizing images from: {args.data_dir}')
     verify_images(args.data_dir+'/sport', max_size=int(300))
@@ -61,9 +61,9 @@ def _train(args):
     arch = getattr(models, args.model_arch)
     print("Creating pretrained conv net")
     learn = create_cnn(data, arch, metrics=accuracy, callback_fns=[MetricsLogger])
-    print("Fit four cycles")
+    print("Fit four cycles with frozen model at lr=1e-2")
     learn.fit_one_cycle(4, 1e-2)
-    print(f'Unfreeze and run {args.epochs} more cycles')
+    print(f'Unfreeze and run {args.epochs} more cycles with lr={args.lr}')
     learn.unfreeze()
     learn.fit_one_cycle(args.epochs, max_lr=slice(args.lr/10,args.lr))
     path = Path(args.model_dir)
