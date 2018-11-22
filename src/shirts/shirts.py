@@ -33,18 +33,18 @@ logger.setLevel(logging.DEBUG)
 JSON_CONTENT_TYPE = 'application/json'
 JPEG_CONTENT_TYPE = 'image/jpeg'
 
-# get the image size from an environment variable for inference
-IMG_SIZE = int(os.environ.get('IMAGE_SIZE', '224'))
-
 # define the classification classes
 CLASSES = ['metal', 'sport']
+
+# get the image size from an environment variable for inference
+IMG_SIZE = int(os.environ.get('IMAGE_SIZE', '224'))
 
 # The train method
 def _train(args):
     print(f'Called _train method with model arch: {args.model_arch}, batch size: {args.batch_size}, image size: {args.image_size}, epochs: {args.epochs}')
     print(f'Getting training data from dir: {args.data_dir}')
     data = ImageDataBunch.from_folder(args.data_dir, train=".", valid_pct=0.2,
-        ds_tfms=get_transforms(), size=args.image_size, num_workers=4, bs=args.batch_size).normalize(imagenet_stats)
+        ds_tfms=get_transforms(), size=args.image_size, num_workers=args.workers, bs=args.batch_size).normalize(imagenet_stats)
     print(f'Model architecture is {args.model_arch}')
     arch = getattr(models, args.model_arch)
     print("Creating pretrained conv net")
@@ -53,7 +53,7 @@ def _train(args):
     learn.fit_one_cycle(4)
     print(f'Unfreeze and run {args.epochs} more cycles')
     learn.unfreeze()
-    learn.fit_one_cycle(args.epochs, max_lr=slice(3e-5,3e-4))
+    learn.fit_one_cycle(args.epochs, max_lr=slice(args.lr/10,args.lr))
     path = Path(args.model_dir)
     print(f'Saving model weights to dir: {args.model_dir}')
     learn.save(path/args.model_arch)
@@ -67,7 +67,7 @@ def model_fn(model_dir):
     print(f'Model architecture is: {arch_name}')
     arch = getattr(models, arch_name)
     empty_data = ImageDataBunch.single_from_classes(Path('/tmp'), CLASSES, 
-        tfms=get_transforms(), size=224).normalize(imagenet_stats)
+        tfms=get_transforms(), size=IMG_SIZE).normalize(imagenet_stats)
     learn = create_cnn(empty_data, arch, pretrained=False)
     learn.load(Path(model_dir)/arch_name)
     return learn
@@ -104,13 +104,13 @@ def output_fn(prediction, accept=JSON_CONTENT_TYPE):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--workers', type=int, default=2, metavar='W',
+    parser.add_argument('--workers', type=int, default=4, metavar='W',
                         help='number of data loading workers (default: 2)')
     parser.add_argument('--epochs', type=int, default=2, metavar='E',
                         help='number of total epochs to run (default: 2)')
     parser.add_argument('--batch-size', type=int, default=64, metavar='BS',
                         help='batch size (default: 64)')
-    parser.add_argument('--lr', type=float, default=0.001, metavar='LR',
+    parser.add_argument('--lr', type=float, default=3e-4, metavar='LR',
                         help='initial learning rate (default: 0.001)')
     parser.add_argument('--momentum', type=float, default=0.9, metavar='M', help='momentum (default: 0.9)')
     parser.add_argument('--dist-backend', type=str, default='gloo', help='distributed backend (default: gloo)')
