@@ -45,8 +45,7 @@ def model_fn(model_dir):
     print(f'Model architecture is: {arch_name}')
     arch = getattr(models, arch_name)
     # get the classes from saved 'classes.txt' file
-    with open(Path(model_dir)/'classes.txt', 'r') as f:
-        classes = f.read().splitlines()
+    classes = loadtxt_str(Path(model_dir)/'classes.txt')
     print(f'Classes are {classes}')
     # create an empty data bunch object
     empty_data = ImageDataBunch.single_from_classes(Path('/tmp'), classes, 

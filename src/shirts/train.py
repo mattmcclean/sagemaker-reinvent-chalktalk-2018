@@ -74,9 +74,7 @@ def _train(args):
     learn.fit_one_cycle(args.epochs, max_lr=slice(args.lr/10,args.lr))
     path = Path(args.model_dir)
     print(f'Writing classes to model dir')
-    with open(path/'classes.txt', 'w') as f:
-        for item in data.classes:
-            f.write("%s\n" % item)    
+    save_texts(path/'classes.txt', data.classes)
     print(f'Saving model weights to dir: {args.model_dir}')
     learn.save(path/args.model_arch)
 
