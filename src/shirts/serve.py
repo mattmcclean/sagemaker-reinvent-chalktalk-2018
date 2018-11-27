@@ -36,9 +36,6 @@ JPEG_CONTENT_TYPE = 'image/jpeg'
 # get the image size from an environment variable for inference
 IMG_SIZE = int(os.environ.get('IMAGE_SIZE', '224'))
 
-# define the classification classes
-CLASSES = ['metal', 'sport']
-
 # Return the Convolutional Neural Network model
 def model_fn(model_dir):
     logger.debug('model_fn')
@@ -47,8 +44,14 @@ def model_fn(model_dir):
     arch_name = os.path.splitext(os.path.split(glob.glob(f'{model_dir}/resnet*.pth')[0])[1])[0]
     print(f'Model architecture is: {arch_name}')
     arch = getattr(models, arch_name)
-    empty_data = ImageDataBunch.single_from_classes(Path('/tmp'), CLASSES, 
+    # get the classes from saved 'classes.txt' file
+    with open(Path(model_dir)/'classes.txt', 'r') as f:
+        classes = f.read().splitlines()
+    print(f'Classes are {classes}')
+    # create an empty data bunch object
+    empty_data = ImageDataBunch.single_from_classes(Path('/tmp'), classes, 
         tfms=get_transforms(), size=IMG_SIZE).normalize(imagenet_stats)
+    # create the learner object
     learn = create_cnn(empty_data, arch, pretrained=False)
     learn.load(Path(model_dir)/arch_name)
     return learn

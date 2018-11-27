@@ -56,7 +56,13 @@ def _train(args):
             .transform(get_transforms(), size=args.image_size)
             .databunch(bs=args.batch_size, num_workers=args.workers)
             .normalize(imagenet_stats))
-
+ 
+#    data = ImageDataBunch.from_folder(args.data_dir, train=".", valid_pct=args.valid_pct,
+#                                      ds_tfms=get_transforms(), size=args.image_size, num_workers=args.workers,
+#                                      bs=args.batch_size).normalize(imagenet_stats)
+    
+    print(f'Classes are {data.classes}')
+    
     print(f'Model architecture is {args.model_arch}')
     arch = getattr(models, args.model_arch)
     print("Creating pretrained conv net")
@@ -67,6 +73,10 @@ def _train(args):
     learn.unfreeze()
     learn.fit_one_cycle(args.epochs, max_lr=slice(args.lr/10,args.lr))
     path = Path(args.model_dir)
+    print(f'Writing classes to model dir')
+    with open(path/'classes.txt', 'w') as f:
+        for item in data.classes:
+            f.write("%s\n" % item)    
     print(f'Saving model weights to dir: {args.model_dir}')
     learn.save(path/args.model_arch)
 
