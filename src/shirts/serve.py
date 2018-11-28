@@ -39,22 +39,7 @@ IMG_SIZE = int(os.environ.get('IMAGE_SIZE', '224'))
 # Return the Convolutional Neural Network model
 def model_fn(model_dir):
     logger.debug('model_fn')
-    fastai.defaults.device = torch.device('cpu')
-    # get the model architecture from name of saved model weights
-    arch_name = os.path.splitext(os.path.split(glob.glob(f'{model_dir}/resnet*.pth')[0])[1])[0]
-    print(f'Model architecture is: {arch_name}')
-    arch = getattr(models, arch_name)
-    # get the classes from saved 'classes.txt' file
-    with open(Path(model_dir)/'classes.txt', 'r') as f:
-        classes = f.read().splitlines()
-    print(f'Classes are {classes}')
-    # create an empty data bunch object
-    empty_data = ImageDataBunch.single_from_classes(Path('/tmp'), classes, 
-        tfms=get_transforms(), size=IMG_SIZE).normalize(imagenet_stats)
-    # create the learner object
-    learn = create_cnn(empty_data, arch, pretrained=False)
-    learn.load(Path(model_dir)/arch_name)
-    return learn
+    return torch.jit.load(glob.glob(f'{model_dir}/*_jit'))
 
 # Deserialize the Invoke request body into an object we can perform prediction on
 def input_fn(request_body, content_type=JPEG_CONTENT_TYPE):
@@ -62,22 +47,30 @@ def input_fn(request_body, content_type=JPEG_CONTENT_TYPE):
     # process an image uploaded to the endpoint
     if content_type == JPEG_CONTENT_TYPE:
         img = open_image(BytesIO(request_body))
-        return img
+        return _normalize_image(img)
     # process a URL submitted to the endpoint
     if content_type == JSON_CONTENT_TYPE:
         img_request = requests.get(request_body['url'], stream=True)
         img = open_image(BytesIO(img_request.content))
-        return img        
+        return _normalize_image(img)        
     raise Exception('Requested unsupported ContentType in content_type: {}'.format(content_type))
+    
+def _normalize_img(img):
+    img_data = img.apply_tfms(crop_pad(), size=224).px
+    return normalize(img_data, tensor(imagenet_stats[0]), tensor(imagenet_stats[1])).unsqueeze(0)
 
 # Perform prediction on the deserialized object, with the loaded model
 def predict_fn(input_object, model):
     logger.info("Calling model")
-    predict_class,_,predict_values = model.predict(input_object)
+    # get the classes from saved 'classes.txt' file
+    classes = loadtxt_str('classes.txt')
+    
+    predict_values = model(input_object)
+    preds = F.softmax(predict_values, dim=1)
+    conf_score, indx = torch.max(preds, dim=1)
+    predict_class = classes[indx]
     print(f'Predicted class is {predict_class}')
     print(f'Predicted values are {predict_values}')
-    preds = F.softmax(predict_values, dim=0)
-    conf_score, indx = torch.max(preds, dim=0)
     print(f'Softmax confidence score is {conf_score.item()}')
     response = {}
     response['class'] = predict_class
