@@ -74,13 +74,13 @@ def input_fn(request_body, content_type=JPEG_CONTENT_TYPE):
 def predict_fn(input_object, model):
     logger.info("Calling model")
     predict_class,_,predict_values = model.predict(input_object)
-    print(f'Predicted class is {predict_class}')
+    print(f'Predicted class is {str(predict_class)}')
     print(f'Predicted values are {predict_values}')
     preds = F.softmax(predict_values, dim=0)
     conf_score, indx = torch.max(preds, dim=0)
     print(f'Softmax confidence score is {conf_score.item()}')
     response = {}
-    response['class'] = predict_class
+    response['class'] = str(predict_class)
     response['confidence'] = conf_score.item()
     return response
 
@@ -88,6 +88,7 @@ def predict_fn(input_object, model):
 def output_fn(prediction, accept=JSON_CONTENT_TYPE):        
     logger.info('Serializing the generated output.')
     if accept == JSON_CONTENT_TYPE:
-        return json.dumps(prediction), accept
+        output = json.dumps(prediction)
+        return output, accept
     raise Exception('Requested unsupported ContentType in Accept: {}'.format(accept))    
 
