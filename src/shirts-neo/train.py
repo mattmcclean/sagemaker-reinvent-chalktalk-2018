@@ -72,15 +72,29 @@ def _train(args):
     print(f'Unfreeze and run {args.epochs} more cycles with lr={args.lr}')
     learn.unfreeze()
     learn.fit_one_cycle(args.epochs, max_lr=slice(args.lr/10,args.lr))
+    path = Path(args.model_dir)
+    print(f'Writing classes to model dir')
+    save_texts(path/'classes.txt', data.classes)
     print(f'Saving model weights to dir: {args.model_dir}')
     learn.save(path/args.model_arch)
 
 def neo_preprocess(payload, content_type):
     import logging
     import io
-    from fastai import *
-    from fastai.vision import *
+    from PIL import Image
+    from torchvision import models, transforms
 
+    # processing pipeline
+    preprocess = transforms.Compose([
+        transforms.Resize(256),
+        transforms.CenterCrop(224),
+        transforms.ToTensor(),
+        transforms.Normalize(
+            mean=[0.485, 0.456, 0.406],
+            std=[0.229, 0.224, 0.225]
+        )
+    ])
+    
     logging.info('Invoking user-defined pre-processing function')
 
     if content_type != 'image/jpeg':
@@ -88,8 +102,9 @@ def neo_preprocess(payload, content_type):
     
     f = io.BytesIO(payload)
     # Load image
-    image = open_image(io.BytesIO(f))
-    return image
+    image = Image.open(io.BytesIO(f))
+    img_tensor = preprocess(image)
+    return img_tensor.unsqueeze(0)
 
 def neo_postprocess(result):
     import logging
