@@ -79,7 +79,10 @@ def _train(args):
     
     trace_input = torch.ones(1,3,args.image_size,args.image_size).cuda()
     jit_model = torch.jit.trace(learn.model.float(), trace_input)
-    torch.jit.save(jit_model, path/'f{args.model_arch}_jit')
+    output_path = str(path/f'{args.model_arch}_jit')
+    print(f'Type of model is {type(jit_model)}')
+    print(f'Type of path is {type(output_path)}')
+    torch.jit.save(jit_model, output_path)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

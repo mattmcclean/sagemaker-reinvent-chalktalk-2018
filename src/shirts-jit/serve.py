@@ -36,10 +36,18 @@ JPEG_CONTENT_TYPE = 'image/jpeg'
 # get the image size from an environment variable for inference
 IMG_SIZE = int(os.environ.get('IMAGE_SIZE', '224'))
 
+classes = []
+
 # Return the Convolutional Neural Network model
 def model_fn(model_dir):
+    global classes
     logger.debug('model_fn')
-    return torch.jit.load(glob.glob(f'{model_dir}/*_jit'))
+    # get the classes from saved 'classes.txt' file
+    classes = loadtxt_str(Path(model_dir)/'classes.txt')
+    print(f'Classes are {classes}')    
+    model_path = glob.glob(f'{model_dir}/*_jit')[0]
+    print(f'Model path is {model_path}')
+    return torch.jit.load(model_path, map_location=torch.device('cpu'))
 
 # Deserialize the Invoke request body into an object we can perform prediction on
 def input_fn(request_body, content_type=JPEG_CONTENT_TYPE):
@@ -47,12 +55,12 @@ def input_fn(request_body, content_type=JPEG_CONTENT_TYPE):
     # process an image uploaded to the endpoint
     if content_type == JPEG_CONTENT_TYPE:
         img = open_image(BytesIO(request_body))
-        return _normalize_image(img)
+        return _normalize_img(img)
     # process a URL submitted to the endpoint
     if content_type == JSON_CONTENT_TYPE:
         img_request = requests.get(request_body['url'], stream=True)
         img = open_image(BytesIO(img_request.content))
-        return _normalize_image(img)        
+        return _normalize_img(img)        
     raise Exception('Requested unsupported ContentType in content_type: {}'.format(content_type))
     
 def _normalize_img(img):
@@ -62,9 +70,6 @@ def _normalize_img(img):
 # Perform prediction on the deserialized object, with the loaded model
 def predict_fn(input_object, model):
     logger.info("Calling model")
-    # get the classes from saved 'classes.txt' file
-    classes = loadtxt_str('classes.txt')
-    
     predict_values = model(input_object)
     preds = F.softmax(predict_values, dim=1)
     conf_score, indx = torch.max(preds, dim=1)
