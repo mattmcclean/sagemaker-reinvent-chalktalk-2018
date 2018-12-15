@@ -14,16 +14,14 @@ import logging
 import json
 import os
 import glob
-from io import BytesIO
-import requests
+import io
 import sys
 
 import torch
 import torch.nn.functional as F
 
-import fastai
-from fastai import *
-from fastai.vision import *
+from PIL import Image
+from torchvision import models, transforms
 
 # setup the logger
 logger = logging.getLogger(__name__)
@@ -38,12 +36,28 @@ IMG_SIZE = int(os.environ.get('IMAGE_SIZE', '224'))
 
 classes = []
 
+# Image pre-processing transforms
+normalize = transforms.Normalize(
+    mean=[0.485, 0.456, 0.406],
+    std=[0.229, 0.224, 0.225]
+)
+
+# processing pipeline
+preprocess = transforms.Compose([
+    transforms.Resize(256),
+    transforms.CenterCrop(224),
+    transforms.ToTensor(),
+    normalize
+])
+
 # Return the Convolutional Neural Network model
 def model_fn(model_dir):
     global classes
-    logger.debug('model_fn')
+    logger.debug(' v')
+    print(f'Model dir is {model_dir}')
     # get the classes from saved 'classes.txt' file
-    classes = loadtxt_str(Path(model_dir)/'classes.txt')
+    with open(f'{model_dir}/classes.txt', 'r') as f:
+        classes = f.read().splitlines()
     print(f'Classes are {classes}')    
     model_path = glob.glob(f'{model_dir}/*_jit')[0]
     print(f'Model path is {model_path}')
@@ -54,18 +68,13 @@ def input_fn(request_body, content_type=JPEG_CONTENT_TYPE):
     logger.info('Deserializing the input data.')
     # process an image uploaded to the endpoint
     if content_type == JPEG_CONTENT_TYPE:
-        img = open_image(BytesIO(request_body))
-        return _normalize_img(img)
-    # process a URL submitted to the endpoint
-    if content_type == JSON_CONTENT_TYPE:
-        img_request = requests.get(request_body['url'], stream=True)
-        img = open_image(BytesIO(img_request.content))
-        return _normalize_img(img)        
+        img = Image.open(io.BytesIO(request_body))
+        return _normalize_img(img)   
     raise Exception('Requested unsupported ContentType in content_type: {}'.format(content_type))
     
 def _normalize_img(img):
-    img_data = img.apply_tfms(crop_pad(), size=224).px
-    return normalize(img_data, tensor(imagenet_stats[0]), tensor(imagenet_stats[1])).unsqueeze(0)
+    img_tensor = preprocess(img)
+    return img_tensor.unsqueeze(0)
 
 # Perform prediction on the deserialized object, with the loaded model
 def predict_fn(input_object, model):
@@ -88,4 +97,3 @@ def output_fn(prediction, accept=JSON_CONTENT_TYPE):
     if accept == JSON_CONTENT_TYPE:
         return json.dumps(prediction), accept
     raise Exception('Requested unsupported ContentType in Accept: {}'.format(accept))    
-
