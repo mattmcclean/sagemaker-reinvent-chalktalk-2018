@@ -56,10 +56,7 @@ def _train(args):
             .transform(get_transforms(), size=args.image_size)
             .databunch(bs=args.batch_size, num_workers=args.workers)
             .normalize(imagenet_stats))
- 
-#    data = ImageDataBunch.from_folder(args.data_dir, train=".", valid_pct=args.valid_pct,
-#                                      ds_tfms=get_transforms(), size=args.image_size, num_workers=args.workers,
-#                                      bs=args.batch_size).normalize(imagenet_stats)
+
     
     print(f'Classes are {data.classes}')
     

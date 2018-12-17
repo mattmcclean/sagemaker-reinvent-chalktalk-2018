@@ -72,6 +72,7 @@ def input_fn(request_body, content_type=JPEG_CONTENT_TYPE):
         return _normalize_img(img)   
     raise Exception('Requested unsupported ContentType in content_type: {}'.format(content_type))
     
+# Normalise the image using the Torchvision library
 def _normalize_img(img):
     img_tensor = preprocess(img)
     return img_tensor.unsqueeze(0)

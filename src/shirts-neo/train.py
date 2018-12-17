@@ -91,7 +91,9 @@ def neo_preprocess(payload, content_type):
     # Load image and convert to RGB
     image = PIL.Image.open(f).convert('RGB')
     # Resize
-    image = image.resize((256,256), Image.ANTIALIAS)
+    width = 256 
+    height = 256
+    image = image.resize((width, height), PIL.Image.ANTIALIAS)
     # Centre crop
     new_width = 224
     new_height = new_width
