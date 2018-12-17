@@ -56,11 +56,6 @@ def _train(args):
             .transform(get_transforms(), size=args.image_size)
             .databunch(bs=args.batch_size, num_workers=args.workers)
             .normalize(imagenet_stats))
- 
-#    data = ImageDataBunch.from_folder(args.data_dir, train=".", valid_pct=args.valid_pct,
-#                                      ds_tfms=get_transforms(), size=args.image_size, num_workers=args.workers,
-#                                      bs=args.batch_size).normalize(imagenet_stats)
-    
     print(f'Classes are {data.classes}')
     
     print(f'Model architecture is {args.model_arch}')
@@ -75,58 +70,62 @@ def _train(args):
     path = Path(args.model_dir)
     print(f'Writing classes to model dir')
     save_texts(path/'classes.txt', data.classes)
-    print(f'Saving model weights to dir: {args.model_dir}')
-    learn.save(path/args.model_arch)
+    #print(f'Saving model weights to dir: {args.model_dir}')
+    #learn.save(path/args.model_arch)
+    dummy_input = torch.ones(1,3,args.image_size,args.image_size).cuda()
+    output_path = str(path/f'{args.model_arch}.onnx')
+    torch.onnx.export(learn.model, dummy_input, output_path)    
 
 def neo_preprocess(payload, content_type):
     import logging
+    import numpy as np
+    import PIL.Image   # Training container doesn't have this package
     import io
-    from PIL import Image
-    from torchvision import models, transforms
 
-    # processing pipeline
-    preprocess = transforms.Compose([
-        transforms.Resize(256),
-        transforms.CenterCrop(224),
-        transforms.ToTensor(),
-        transforms.Normalize(
-            mean=[0.485, 0.456, 0.406],
-            std=[0.229, 0.224, 0.225]
-        )
-    ])
-    
     logging.info('Invoking user-defined pre-processing function')
 
     if content_type != 'image/jpeg':
         raise RuntimeError('Content type must be image/jpeg')
-    
+        
     f = io.BytesIO(payload)
-    # Load image
-    image = Image.open(io.BytesIO(f))
-    img_tensor = preprocess(image)
-    return img_tensor.unsqueeze(0)
+    # Load image and convert to RGB
+    image = PIL.Image.open(f).convert('RGB')
+    # Resize
+    image = image.resize((256,256), Image.ANTIALIAS)
+    # Centre crop
+    new_width = 224
+    new_height = new_width
+    left = (width - new_width)/2
+    top = (height - new_height)/2
+    right = (width + new_width)/2
+    bottom = (height + new_height)/2
+    image = image.crop((left, top, right, bottom))
+    # Convert to numpy array and divide by 255 (to keep values between 0 and 1)
+    im_arr = np.asarray(image, dtype=np.float32) / 255
+    # normalize the image based on ImageNet stats
+    im_arr = np.divide(np.subtract(im_arr, [0.485, 0.456, 0.406], dtype=np.float32), [0.229, 0.224, 0.225], dtype=np.float32)
+    # transpose to get in correct order
+    im_arr = im_arr.transpose(2, 0, 1)
+    # expand for batch size dimension
+    im_arr = np.expand_dims(im_arr, axis=0)
+    return im_arr
 
 def neo_postprocess(result):
     import logging
+    import numpy as np
     import json
-    
-    import torch
-    import torch.nn.functional as F
 
     logging.info('Invoking user-defined post-processing function')
     
-    # Pass output through softmax
-    preds = F.softmax(result, dim=1)
-    conf_score, indx = torch.max(preds, dim=1)
-    # create the response object
-    response = {}
-    response['class_idx'] = indx
-    response['confidence'] = conf_score.item()
+    # Softmax (assumes batch size 1)
+    result = np.squeeze(result)
+    result_exp = np.exp(result - np.max(result))
+    result = result_exp / np.sum(result_exp)
 
-    response_body = json.dumps(response)
+    response_body = json.dumps(result.tolist())
     content_type = 'application/json'
 
-    return response_body, content_type    
+    return response_body, content_type
     
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
