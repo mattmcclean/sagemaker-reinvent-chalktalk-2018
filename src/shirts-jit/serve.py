@@ -63,13 +63,11 @@ def model_fn(model_dir):
     model_path = glob.glob(f'{model_dir}/*_jit')[0]
     print(f'Model path is {model_path}')
     if torch.cuda.is_available():
-        print("Running on CPU")
-        device = torch.device('cpu')
+        print("Running model on GPU")
+        model = torch.jit.load(model_path, map_location=torch.device('cuda'))
     else:
-        print("Running on GPU")
-        device = torch.device('cuda')
-    model = torch.jit.load(model_path, map_location=device)
-    model.to(device)
+        print("Running model on CPU")
+        model = torch.jit.load(model_path, map_location=torch.device('cpu'))
     return model.eval()
 
 # Deserialize the Invoke request body into an object we can perform prediction on
@@ -84,8 +82,12 @@ def input_fn(request_body, content_type=JPEG_CONTENT_TYPE):
 # Normalise the image using the Torchvision library
 def _normalize_img(img):
     img_tensor = preprocess(img)
-    return img_tensor.unsqueeze(0)
-
+    img_tensor = img_tensor.unsqueeze(0)
+    if torch.cuda.is_available():
+        print("Moving input to GPU")
+        return img_tensor.to(torch.device('cuda'))
+    return img_tensor
+        
 # Perform prediction on the deserialized object, with the loaded model
 def predict_fn(input_object, model):
     logger.info("Calling model")

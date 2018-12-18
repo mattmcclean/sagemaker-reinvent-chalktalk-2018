@@ -53,7 +53,12 @@ def model_fn(model_dir):
         tfms=get_transforms(), size=IMG_SIZE).normalize(imagenet_stats)
     # create the learner object
     learn = create_cnn(empty_data, arch, pretrained=False)
-    learn.load(Path(model_dir)/arch_name)
+    if torch.cuda.is_available():
+        print("Running model on GPU")
+        learn.load(Path(model_dir)/arch_name, device=torch.device('cuda'))
+    else:
+        print("Running model on CPU")
+        learn.load(Path(model_dir)/arch_name, device=torch.device('cpu'))
     learn.model.eval()
     return learn
 
