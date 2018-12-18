@@ -54,6 +54,7 @@ def model_fn(model_dir):
     # create the learner object
     learn = create_cnn(empty_data, arch, pretrained=False)
     learn.load(Path(model_dir)/arch_name)
+    learn.model.eval()
     return learn
 
 # Deserialize the Invoke request body into an object we can perform prediction on

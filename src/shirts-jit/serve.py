@@ -62,7 +62,15 @@ def model_fn(model_dir):
     print(f'Classes are {classes}')    
     model_path = glob.glob(f'{model_dir}/*_jit')[0]
     print(f'Model path is {model_path}')
-    return torch.jit.load(model_path, map_location=torch.device('cpu'))
+    if torch.cuda.is_available():
+        print("Running on CPU")
+        device = torch.device('cpu')
+    else:
+        print("Running on GPU")
+        device = torch.device('gpu')
+    model = torch.jit.load(model_path, map_location=device)
+    model.to(device)
+    return model.eval()
 
 # Deserialize the Invoke request body into an object we can perform prediction on
 def input_fn(request_body, content_type=JPEG_CONTENT_TYPE):
