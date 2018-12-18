@@ -17,6 +17,7 @@ import glob
 from io import BytesIO
 import requests
 import sys
+import time
 
 import torch
 import torch.nn.functional as F
@@ -72,7 +73,9 @@ def input_fn(request_body, content_type=JPEG_CONTENT_TYPE):
 # Perform prediction on the deserialized object, with the loaded model
 def predict_fn(input_object, model):
     logger.info("Calling model")
+    start_time = time.time()
     predict_class,_,predict_values = model.predict(input_object)
+    print("--- Inference time: %s seconds ---" % (time.time() - start_time))
     print(f'Predicted class is {str(predict_class)}')
     print(f'Predicted values are {predict_values}')
     preds = F.softmax(predict_values, dim=0)

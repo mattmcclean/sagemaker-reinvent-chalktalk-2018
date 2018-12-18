@@ -16,6 +16,7 @@ import os
 import glob
 import io
 import sys
+import time
 
 import torch
 import torch.nn.functional as F
@@ -80,7 +81,9 @@ def _normalize_img(img):
 # Perform prediction on the deserialized object, with the loaded model
 def predict_fn(input_object, model):
     logger.info("Calling model")
+    start_time = time.time()
     predict_values = model(input_object)
+    print("--- Inference time: %s seconds ---" % (time.time() - start_time))
     preds = F.softmax(predict_values, dim=1)
     conf_score, indx = torch.max(preds, dim=1)
     predict_class = classes[indx]
