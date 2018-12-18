@@ -1,3 +1,7 @@
 .ipynb_checkpoints/
 data/
 tmp*
+Dockerfile*
+MANIFEST.in
+setup.cfg
+setup.py
