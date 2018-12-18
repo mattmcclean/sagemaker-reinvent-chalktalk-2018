@@ -67,7 +67,7 @@ def model_fn(model_dir):
         device = torch.device('cpu')
     else:
         print("Running on GPU")
-        device = torch.device('gpu')
+        device = torch.device('cuda')
     model = torch.jit.load(model_path, map_location=device)
     model.to(device)
     return model.eval()
