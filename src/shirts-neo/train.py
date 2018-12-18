@@ -74,7 +74,9 @@ def _train(args):
     #learn.save(path/args.model_arch)
     dummy_input = torch.ones(1,3,args.image_size,args.image_size).cuda()
     output_path = str(path/f'{args.model_arch}.onnx')
-    torch.onnx.export(learn.model, dummy_input, output_path)    
+    input_names = [ "actual_input_1" ] + [ "learned_%d" % i for i in range(16) ]
+    output_names = [ "output1" ]
+    torch.onnx.export(learn.model, dummy_input, output_path, verbose=True, input_names=input_names, output_names=output_names)    
 
 def neo_preprocess(payload, content_type):
     import logging
